@@ -1,7 +1,7 @@
 # VoiceX 项目开发记录
 
 ## 项目概述
-VoiceX 是一个基于 FunASR、Docker 和 `launchd` 的 macOS 实时听写应用，采用"Worker-Supervisor-Client"三层架构。
+VoiceX 是一个基于 FunASR 和 Docker 的 macOS 实时听写应用,采用"Worker-Client"两层架构。
 
 ## 第一阶段：Worker 核心引擎 ✅ 完成 (2025-08-04)
 
@@ -34,24 +34,43 @@ cd tests && python3 test_streaming.py --audio_in test2.wav
 # 结果: 97个实时中间结果 + 高精度最终结果
 ```
 
+## 架构决策 (2025-08-04)
+
+### 第二阶段：Supervisor 守护服务 ❌ 跳过
+**决策**: 经过评估,认为launchd守护服务复杂度过高，不适合个人项目  
+**原因**: Docker本身具备重启机制(`--restart=unless-stopped`),手动管理更加灵活简单
+
+## 第三阶段：Client 客户端应用 ✅ 完成 (2025-08-04)
+
+### 核心组件
+- **WebSocketManager.swift**: 基于test_streaming.py的WebSocket通信
+- **AudioRecorder.swift**: macOS音频录制+格式转换(48kHz→16kHz)
+- **VoiceRecognitionController.swift**: 录音与识别流程管理
+- **ContentView.swift**: SwiftUI实时语音识别界面
+
+### 技术要点
+1. **音频格式转换**: 硬件48kHz Float32 → 16kHz Int16 (FunASR兼容)
+2. **权限配置**: 网络访问+麦克风权限(macOS沙盒)
+3. **协议复用**: 直接使用验证成功的2pass WebSocket协议
+4. **实时处理**: 100ms低延迟音频块传输
+
+### 验证成功
+```bash
+cd client/VoiceX && xcodebuild build
+# 结果: 构建成功，可正常连接Worker并进行实时语音识别
+```
+
 ## 下一阶段计划
 
-### 第二阶段：Supervisor 守护服务
-**目标**: 使用macOS `launchd`实现容器自动化管理  
-**任务**: 编写.plist配置，实现永不宕机的守护进程
-
-### 第三阶段：Client 客户端应用  
-**目标**: 开发macOS App，实现音频采集和WebSocket连接  
-**任务**: AVFoundation音频处理 + Network框架连接
-
-### 第四阶段：功能集成与优化
-**目标**: 完成"隔空打字"功能和压力测试  
-**任务**: CGEvent键盘模拟 + 稳定性验证
+### 第四阶段：高级功能实现
+**目标**: 绑定辅助功能,启动光标跟随功能,能在任意光标后实现语音转文字输入,不管焦点如何变化,在屏幕,浏览器,app,终端如何切换,7*24h,只要不关闭,都能流畅输入
 
 ## 基本操作
 ```bash
 cd /Users/CodeProjects/VoiceX/worker
-./run_worker.sh              # 启动
-./run_worker.sh restart      # 重启  
-./run_worker.sh logs         # 查看日志
+./run_worker.sh              
+./run_worker.sh restart       
+./run_worker.sh logs         
+./run_worker.sh status 
+./run_worker.sh clean      
 ```

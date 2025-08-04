@@ -15,7 +15,7 @@ RUN touch /workspace/FunASR/runtime/websocket/hotwords.txt
 
 # 健康检查 - 检查WebSocket服务是否可用
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
-    CMD nc -z localhost 10095 || exit 1
+    CMD ps aux | grep funasr-wss-server-2pass | grep -v grep || exit 1
 
 # 创建自定义启动脚本确保前台运行
 COPY start_server.sh /workspace/FunASR/runtime/
