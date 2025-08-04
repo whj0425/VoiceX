@@ -4,11 +4,11 @@
 
 VoiceX 是一个基于 FunASR、Docker 和 `launchd` 的 macOS 实时听写应用，采用"Worker-Supervisor-Client"三层架构，具备 7x24 小时不间断运行能力。
 
-## 第一阶段：Worker 核心引擎 ✅ 已完成
+## 第一阶段：Worker 核心引擎 🔄 进行中
 
 **目标**: 创建包含 FunASR 模型的 Docker 容器，支持 WebSocket 流式识别  
-**完成时间**: 2025年8月4日  
-**状态**: ✅ 成功完成并验证
+**当前进度**: 80% - 服务可运行并识别，需完善测试客户端  
+**状态**: 🔄 Docker服务稳定运行，基础识别功能已验证
 
 ### 实现成果
 
@@ -22,6 +22,11 @@ VoiceX 是一个基于 FunASR、Docker 和 `launchd` 的 macOS 实时听写应�
 └── models/                # 模型文件目录
     ├── damo/             # 达摩院模型集合
     └── thuduj12/         # 清华大学ITN模型
+
+/tests/
+├── test_client.py          # WebSocket测试客户端
+├── test_audio.wav         # 测试音频文件(16k, 16bit, mono)
+└── test_audio.m4a         # 原始测试音频文件
 ```
 
 #### 2. 服务配置
@@ -41,17 +46,17 @@ VoiceX 是一个基于 FunASR、Docker 和 `launchd` 的 macOS 实时听写应�
 
 ### 关键技术突破
 
-#### 问题1: 容器持续重启 
-**原因**: 原始`run_server_2pass.sh`脚本使用后台运行(`&`)，导致主进程立即退出  
+#### 问题1: funasr-wss-server-2pass无法返回结果
+**原因**: 2pass模式强制包含VAD模型，导致识别流程阻塞  
+**解决**: 切换到`funasr-wss-server`，禁用VAD，简化识别流程
+
+#### 问题2: 容器持续重启
+**原因**: 原始服务脚本使用后台运行(`&`)，导致主进程立即退出  
 **解决**: 创建`start_server.sh`使用`exec`前台运行，确保容器主进程持续存在
 
-#### 问题2: 健康检查配置冲突
-**原因**: Dockerfile与run_worker.sh中健康检查时间参数不一致  
-**解决**: 统一设置启动宽限期为180秒，匹配模型加载时间
-
-#### 问题3: 模型路径错误
-**原因**: 某些模型目录结构不匹配  
-**解决**: 修正Dockerfile中的模型路径参数
+#### 问题3: 测试客户端协议不匹配
+**原因**: 初版test_client.py协议格式错误  
+**解决**: 基于官方示例修正WebSocket通信协议
 
 ### 服务验证结果
 
@@ -65,7 +70,8 @@ docker logs voicex-worker-container --tail 10
 # 结果: 所有模型成功加载，服务监听10095端口
 ```
 
-**最终状态**: 🟢 服务稳定运行，支持WebSocket连接，所有模型加载成功
+**当前状态**: 🟢 服务稳定运行，WebSocket识别功能已验证  
+**测试结果**: `cd tests && python3 test_client.py` 成功返回: "这是 一个 测试 文件 这是 一个 测试 录音 录音"
 
 ## 使用方法
 
