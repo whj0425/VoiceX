@@ -9,16 +9,21 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var controller = VoiceRecognitionController()
+    @StateObject private var textInjection = TextInjectionManager()
     
     var body: some View {
         VStack(spacing: 20) {
             headerView
             connectionStatusView
+            injectionStatusView
             recognitionTextView
             controlButtonsView
         }
         .padding()
         .frame(minWidth: 500, minHeight: 400)
+        .onAppear {
+            controller.setTextInjectionManager(textInjection)
+        }
     }
     
     private var headerView: some View {
@@ -48,6 +53,25 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundColor(.orange)
             }
+        }
+    }
+    
+    private var injectionStatusView: some View {
+        HStack {
+            Circle()
+                .fill(textInjection.isInjectionEnabled ? .blue : .gray)
+                .frame(width: 8, height: 8)
+            Text("光标注入: \(textInjection.permissionStatus)")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            Button(textInjection.isInjectionEnabled ? "禁用注入" : "启用注入") {
+                textInjection.toggleInjection()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
     }
     

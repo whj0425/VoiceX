@@ -53,17 +53,63 @@ cd tests && python3 test_streaming.py --audio_in test2.wav
 2. **权限配置**: 网络访问+麦克风权限(macOS沙盒)
 3. **协议复用**: 直接使用验证成功的2pass WebSocket协议
 4. **实时处理**: 100ms低延迟音频块传输
-
 ### 验证成功
 ```bash
 cd client/VoiceX && xcodebuild build
 # 结果: 构建成功，可正常连接Worker并进行实时语音识别
 ```
 
-## 下一阶段计划
+## 第四阶段：全局光标注入功能 ✅ 基本完成 (2025-08-05)
 
-### 第四阶段：高级功能实现
-**目标**: 绑定辅助功能,启动光标跟随功能,能在任意光标后实现语音转文字输入,不管焦点如何变化,在屏幕,浏览器,app,终端如何切换,7*24h,只要不关闭,都能流畅输入
+### 核心实现
+- **TextInjectionManager.swift**: 基于CGEvent的跨应用文本注入引擎
+- **辅助功能权限**: 禁用macOS沙盒，成功获取系统级文本输入权限
+- **实时注入**: 语音识别结果直接注入到任意应用的光标位置
+
+### 技术突破
+1. **权限解决方案**: `app-sandbox = false` → 正常弹出辅助功能权限请求
+2. **CGEvent文本注入**: UTF-16编码 + keyboardSetUnicodeString API
+3. **实时流式处理**: 移除"最终结果"等待逻辑，直接处理中间结果
+
+### 关键Debug过程 (2025-08-05)
+**问题**: 文本注入功能失效
+```
+【中间】 识别结果: 注入
+📝 识别结果处理:
+   - isFinal: false
+   - textInjectionManager存在: true  
+   - 注入已启用: true
+⏭️ 跳过注入 - 条件不满足
+```
+
+**根本原因**: 
+- ❌ **错误逻辑**: 等待 `isFinal: true` 的最终结果
+- ✅ **正确逻辑**: 实时流式24h语音识别本身没有"最终结果"概念
+
+**解决方案**:
+```swift
+// 修改前：只注入最终结果
+if textInjectionManager.isInjectionEnabled && isFinal {
+    textInjectionManager.injectText(text)
+}
+
+// 修改后：注入所有结果但去重
+if textInjectionManager.isInjectionEnabled && 
+   text != lastInjectedText && !text.isEmpty {
+    textInjectionManager.injectText(text)  
+    lastInjectedText = text
+}
+```
+
+### 当前状态
+- ✅ 基本注入功能工作正常
+- ⚠️ **遗留问题**: 仍有重复注入现象（注入两遍） !!!重要
+- 🎯 **下次优化**: 进一步完善去重逻辑
+
+### 验证成功
+- 可在任意应用（浏览器、终端、编辑器）中进行语音转文字
+- 辅助功能权限配置成功
+- 跨应用文本注入技术验证通过
 
 ## 基本操作
 ```bash

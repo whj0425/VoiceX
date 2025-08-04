@@ -10,9 +10,15 @@ class VoiceRecognitionController: ObservableObject {
     
     private let webSocketManager = WebSocketManager()
     private let audioRecorder = AudioRecorder()
+    private var textInjectionManager: TextInjectionManager?
     
     init() {
         setupBindings()
+    }
+    
+    func setTextInjectionManager(_ manager: TextInjectionManager) {
+        textInjectionManager = manager
+        webSocketManager.setTextInjectionManager(manager)
     }
     
     private func setupBindings() {
