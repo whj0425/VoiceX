@@ -7,10 +7,11 @@ class WebSocketManager: ObservableObject {
     @Published var lastRecognitionResult = ""
     @Published var isRecognizing = false
     
+    // 新增：用于将详细结果传递给控制器的闭包
+    var onRecognitionResult: ((_ mode: String, _ text: String, _ isFinal: Bool) -> Void)?
+
     private var webSocketTask: URLSessionWebSocketTask?
     private let serverURL = URL(string: "ws://localhost:10096")!
-    private var textInjectionManager: TextInjectionManager?
-    private var lastInjectedText = ""
     
     private let startSignal: [String: Any] = [
         "mode": "2pass",
@@ -30,9 +31,7 @@ class WebSocketManager: ObservableObject {
         }
     }
     
-    func setTextInjectionManager(_ manager: TextInjectionManager) {
-        textInjectionManager = manager
-    }
+    // `setTextInjectionManager` 已被移除
     
     func connect() async {
         guard !isConnected else { return }
@@ -86,7 +85,7 @@ class WebSocketManager: ObservableObject {
             
             try await webSocketTask?.send(.string(endMessage))
             isRecognizing = false
-            lastInjectedText = "" // 清空上次注入文本，准备下次录音
+            // `lastInjectedText` 相关的逻辑已被移除
             print("📤 发送结束信号: \(endMessage)")
         } catch {
             print("❌ 发送结束信号失败: \(error)")
@@ -128,17 +127,17 @@ class WebSocketManager: ObservableObject {
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) async {
         switch message {
         case .string(let text):
-            await processRecognitionResult(text)
+            await processRecognitionResult(jsonString: text)
         case .data(let data):
             if let text = String(data: data, encoding: .utf8) {
-                await processRecognitionResult(text)
+                await processRecognitionResult(jsonString: text)
             }
         @unknown default:
             print("⚠️ 未知消息类型")
         }
     }
     
-    private func processRecognitionResult(_ jsonString: String) async {
+    private func processRecognitionResult(jsonString: String) async {
         do {
             guard let data = jsonString.data(using: .utf8),
                   let result = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -147,31 +146,18 @@ class WebSocketManager: ObservableObject {
                 return
             }
             
-            let isFinal = result["is_final"] as? Bool ?? true
-            let status = isFinal ? "【最终】" : "【中间】"
+            // 解析 "mode" 和 "is_final"
+            let mode = result["mode"] as? String ?? "unknown"
+            let isFinal = result["is_final"] as? Bool ?? false
             
-            print("\(status) 识别结果: \(text)")
-            print("🔍 is_final字段值: \(result["is_final"] ?? "nil")")
+            print("📦 [WebSocket] 收到结果: mode='\(mode)', is_final=\(isFinal), text='\(text)'")
             
             await MainActor.run {
-                lastRecognitionResult = text
+                // 更新UI显示的文本
+                self.lastRecognitionResult = text
                 
-                print("📝 识别结果处理:")
-                print("   - isFinal: \(isFinal)")
-                print("   - textInjectionManager存在: \(textInjectionManager != nil)")
-                print("   - 注入已启用: \(textInjectionManager?.isInjectionEnabled ?? false)")
-                
-                // 实时流式识别，避免重复注入相同文本
-                if let textInjectionManager = textInjectionManager,
-                   textInjectionManager.isInjectionEnabled,
-                   !text.isEmpty,
-                   text != lastInjectedText {
-                    print("🎯 准备调用注入: \(text)")
-                    textInjectionManager.injectText(text)
-                    lastInjectedText = text
-                } else {
-                    print("⏭️ 跳过注入 - 条件不满足或重复文本")
-                }
+                // 通过闭包将详细结果传递出去
+                self.onRecognitionResult?(mode, text, isFinal)
             }
             
         } catch {
