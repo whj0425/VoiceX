@@ -9,8 +9,7 @@ class WebSocketManager: ObservableObject {
     
     private var webSocketTask: URLSessionWebSocketTask?
     private let serverURL = URL(string: "ws://localhost:10096")!
-    private var textInjectionManager: TextInjectionManager?
-    private var lastInjectedText = ""
+    private weak var voiceRecognitionController: VoiceRecognitionController?
     
     private let startSignal: [String: Any] = [
         "mode": "2pass",
@@ -30,8 +29,8 @@ class WebSocketManager: ObservableObject {
         }
     }
     
-    func setTextInjectionManager(_ manager: TextInjectionManager) {
-        textInjectionManager = manager
+    func setVoiceRecognitionController(_ controller: VoiceRecognitionController) {
+        voiceRecognitionController = controller
     }
     
     func connect() async {
@@ -86,7 +85,6 @@ class WebSocketManager: ObservableObject {
             
             try await webSocketTask?.send(.string(endMessage))
             isRecognizing = false
-            lastInjectedText = "" // 清空上次注入文本，准备下次录音
             print("📤 发送结束信号: \(endMessage)")
         } catch {
             print("❌ 发送结束信号失败: \(error)")
@@ -148,30 +146,21 @@ class WebSocketManager: ObservableObject {
             }
             
             let isFinal = result["is_final"] as? Bool ?? true
+            let mode = result["mode"] as? String ?? (isFinal ? "2pass-offline" : "2pass-online")
             let status = isFinal ? "【最终】" : "【中间】"
             
             print("\(status) 识别结果: \(text)")
-            print("🔍 is_final字段值: \(result["is_final"] ?? "nil")")
+            print("🔍 模式: \(mode), is_final: \(isFinal)")
             
             await MainActor.run {
                 lastRecognitionResult = text
                 
-                print("📝 识别结果处理:")
-                print("   - isFinal: \(isFinal)")
-                print("   - textInjectionManager存在: \(textInjectionManager != nil)")
-                print("   - 注入已启用: \(textInjectionManager?.isInjectionEnabled ?? false)")
-                
-                // 实时流式识别，避免重复注入相同文本
-                if let textInjectionManager = textInjectionManager,
-                   textInjectionManager.isInjectionEnabled,
-                   !text.isEmpty,
-                   text != lastInjectedText {
-                    print("🎯 准备调用注入: \(text)")
-                    textInjectionManager.injectText(text)
-                    lastInjectedText = text
-                } else {
-                    print("⏭️ 跳过注入 - 条件不满足或重复文本")
-                }
+                // 委托给 VoiceRecognitionController 处理
+                voiceRecognitionController?.handleRecognizedResult(
+                    mode: mode,
+                    text: text,
+                    isFinal: isFinal
+                )
             }
             
         } catch {

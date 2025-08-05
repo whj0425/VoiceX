@@ -45,6 +45,41 @@ class TextInjectionManager: ObservableObject {
         print("✅ 已注入文本: \(text)")
     }
     
+    func delete(characterCount: Int) {
+        guard isInjectionEnabled, hasAccessibilityPermission, characterCount > 0 else {
+            return
+        }
+        
+        print("🗑️ 开始删除 \(characterCount) 个字符")
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        
+        let keyCode = CGKeyCode(51) // Backspace KeyCode
+        for _ in 0..<characterCount {
+            let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+            let loc = CGEventTapLocation.cghidEventTap
+            keyDown?.post(tap: loc)
+            keyUp?.post(tap: loc)
+            
+            // 短暂延迟以确保删除操作正确执行
+            usleep(1000) // 1ms
+        }
+        print("✅ 已删除 \(characterCount) 个字符")
+    }
+    
+    func replace(oldText: String, with newText: String) {
+        guard oldText != newText else { return }
+        
+        print("🔄 替换文本: '\(oldText)' -> '\(newText)'")
+        
+        let charactersToDelete = oldText.count
+        if charactersToDelete > 0 {
+            delete(characterCount: charactersToDelete)
+        }
+        
+        injectText(newText)
+    }
+    
     private func injectTextUsingCGEvent(_ text: String) {
         // 使用更简单的方法：创建文本输入事件
         let source = CGEventSource(stateID: .combinedSessionState)
